@@ -18,6 +18,13 @@ The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. I
 - [x] Upgraded to @google/genai SDK (v1.42.0) with Gemini 2.5 Flash Native Audio Live API
 - [x] New `/api/gemini/live` route for real-time audio via `gemini-2.5-flash-native-audio-preview-12-2025`
 - [x] LanguageLearningApp rewritten to use Web Audio API for PCM capture and Gemini Live audio playback
+- [x] Luxury/premium UI redesign with dark glassmorphism, radial gradients, ambient glow effects
+- [x] Real-time Activity Log panel (right sidebar) showing all events with timestamps and type icons
+- [x] Connection status indicator (connected/disconnected) in header and log panel
+- [x] Animated waveform visualizer (20-bar FFT) during recording
+- [x] Audio level meter in log panel during recording
+- [x] Message timestamps displayed under each chat bubble
+- [x] Status bar showing live recording/processing/playing states
 
 ## Current Structure
 
