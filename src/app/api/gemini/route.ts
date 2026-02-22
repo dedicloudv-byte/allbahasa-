@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const systemPrompt = `Kamu adalah tutor bahasa yang ramah dan sabar. Kamu membantu pengguna belajar ${targetLanguage || "Bahasa Inggris"} dari ${nativeLanguage || "Bahasa Indonesia"}.
 
