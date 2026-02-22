@@ -37,18 +37,20 @@ Format respons kamu:
       parts: msg.parts,
     }));
 
-    const chat = ai.chats.create({
-      model: "gemini-2.0-flash",
+    const contents = [
+      ...history,
+      { role: "user", parts: [{ text: message }] },
+    ];
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents,
       config: {
         systemInstruction,
       },
-      history,
     });
 
-    const result = await chat.sendMessage({ message });
-    const text = result.text;
-
-    return NextResponse.json({ response: text });
+    return NextResponse.json({ response: response.text });
   } catch (error: unknown) {
     console.error("Gemini API error:", error);
 
