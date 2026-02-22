@@ -2,39 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 
-// Web Speech API type declarations
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-}
-
-interface SpeechRecognitionInstance extends EventTarget {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  maxAlternatives: number;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-}
-
-interface SpeechRecognitionConstructor {
-  new (): SpeechRecognitionInstance;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
-  }
-}
-
 interface Message {
   role: "user" | "model";
   parts: [{ text: string }];
@@ -58,26 +25,63 @@ const LANGUAGES = [
   { code: "Arabic", label: "🇸🇦 Arabic" },
 ];
 
+// Convert Float32Array PCM to Int16Array PCM
+function float32ToInt16(float32Array: Float32Array): Int16Array {
+  const int16Array = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return int16Array;
+}
+
+// Convert ArrayBuffer to base64
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Convert base64 to Float32Array PCM (from Int16 PCM)
+function base64ToFloat32(base64: string): Float32Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const int16 = new Int16Array(bytes.buffer);
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) {
+    float32[i] = int16[i] / 32768.0;
+  }
+  return float32;
+}
+
 export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLearningAppProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState("English");
   const [nativeLanguage] = useState("Indonesian");
   const [audioLevel, setAudioLevel] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(true);
   const [error, setError] = useState("");
+  const [liveMode, setLiveMode] = useState(true); // Use Gemini Live API for audio
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const speechSynthRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const pcmBufferRef = useRef<Float32Array[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -92,52 +96,52 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
     setMessages([
       {
         role: "model",
-        parts: [{ text: `Halo! Saya siap membantu kamu belajar **${targetLanguage}**! 🎉\n\nKamu bisa:\n- 🎙️ Tekan tombol mikrofon untuk berbicara\n- ⌨️ Ketik pesan di bawah\n- 🌍 Ganti bahasa target di pengaturan\n\nMari mulai! Coba ucapkan atau ketik sesuatu dalam ${targetLanguage} atau Bahasa Indonesia.` }],
+        parts: [{ text: `Halo! Saya siap membantu kamu belajar **${targetLanguage}**! 🎉\n\nKamu bisa:\n- 🎙️ Tekan tombol mikrofon untuk berbicara langsung dengan AI (Gemini Live)\n- ⌨️ Ketik pesan di bawah\n- 🌍 Ganti bahasa target di pengaturan\n\nMari mulai! Coba ucapkan atau ketik sesuatu dalam ${targetLanguage} atau Bahasa Indonesia.` }],
       },
     ]);
   }, [targetLanguage]);
 
-  const speakText = useCallback((text: string) => {
-    if (!autoSpeak || !window.speechSynthesis) return;
+  // Play PCM audio chunks from Gemini Live API
+  const playAudioChunks = useCallback(async (audioChunks: string[], sampleRate: number) => {
+    if (!audioChunks.length) return;
 
-    // Remove markdown formatting
-    const cleanText = text.replace(/\*\*/g, "").replace(/\*/g, "").replace(/#{1,6}\s/g, "");
+    setIsPlayingAudio(true);
+    try {
+      const ctx = new AudioContext({ sampleRate });
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(cleanText);
+      // Combine all chunks
+      const allFloat32Arrays = audioChunks.map(base64ToFloat32);
+      const totalLength = allFloat32Arrays.reduce((sum, arr) => sum + arr.length, 0);
+      const combined = new Float32Array(totalLength);
+      let offset = 0;
+      for (const arr of allFloat32Arrays) {
+        combined.set(arr, offset);
+        offset += arr.length;
+      }
 
-    // Try to find a voice for the target language
-    const voices = window.speechSynthesis.getVoices();
-    const langCode = targetLanguage === "English" ? "en" :
-      targetLanguage === "Japanese" ? "ja" :
-      targetLanguage === "Korean" ? "ko" :
-      targetLanguage === "French" ? "fr" :
-      targetLanguage === "Spanish" ? "es" :
-      targetLanguage === "German" ? "de" :
-      targetLanguage === "Mandarin Chinese" ? "zh" :
-      targetLanguage === "Arabic" ? "ar" : "en";
+      const audioBuffer = ctx.createBuffer(1, combined.length, sampleRate);
+      audioBuffer.copyToChannel(combined, 0);
 
-    const voice = voices.find(v => v.lang.startsWith(langCode));
-    if (voice) utterance.voice = voice;
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      source.onended = () => {
+        setIsPlayingAudio(false);
+        ctx.close();
+      };
+      source.start();
+    } catch (err) {
+      console.error("Audio playback error:", err);
+      setIsPlayingAudio(false);
+    }
+  }, []);
 
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    speechSynthRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }, [autoSpeak, targetLanguage]);
-
-  const sendMessage = useCallback(async (text: string, isAudio = false, audioTranscript = "") => {
+  const sendTextMessage = useCallback(async (text: string) => {
     if (!text.trim() || isLoading) return;
 
     const userMessage: Message = {
       role: "user",
       parts: [{ text }],
-      isAudio,
-      audioTranscript,
     };
 
     const newMessages = [...messages, userMessage];
@@ -161,7 +165,7 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
           message: text,
           targetLanguage,
           nativeLanguage,
-          conversationHistory: historyMessages.slice(0, -1), // exclude current message
+          conversationHistory: historyMessages.slice(0, -1),
         }),
       });
 
@@ -179,24 +183,85 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
       };
 
       setMessages(prev => [...prev, aiMessage]);
-
-      if (autoSpeak) {
-        speakText(data.response);
-      }
     } catch {
       setError("Gagal menghubungi AI. Periksa koneksi internet Anda.");
     } finally {
       setIsLoading(false);
     }
-  }, [messages, isLoading, apiKey, targetLanguage, nativeLanguage, autoSpeak, speakText]);
+  }, [messages, isLoading, apiKey, targetLanguage, nativeLanguage]);
+
+  const sendAudioToLiveAPI = useCallback(async (pcmData: Float32Array) => {
+    setIsProcessingAudio(true);
+    setError("");
+
+    try {
+      // Convert Float32 PCM to Int16 PCM and then to base64
+      const int16Data = float32ToInt16(pcmData);
+      const base64Audio = arrayBufferToBase64(int16Data.buffer.slice(0) as ArrayBuffer);
+
+      const response = await fetch("/api/gemini/live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey,
+          audioData: base64Audio,
+          targetLanguage,
+          nativeLanguage,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Terjadi kesalahan pada Live API");
+        return;
+      }
+
+      // Add a placeholder message for the audio exchange
+      const userMessage: Message = {
+        role: "user",
+        parts: [{ text: "🎙️ [Pesan suara dikirim ke Gemini Live]" }],
+        isAudio: true,
+      };
+      const aiMessage: Message = {
+        role: "model",
+        parts: [{ text: "🔊 [Respons audio dari Gemini Live sedang diputar...]" }],
+        isAudio: true,
+      };
+      setMessages(prev => [...prev, userMessage, aiMessage]);
+
+      // Play the audio response
+      if (data.audioChunks && data.audioChunks.length > 0) {
+        await playAudioChunks(data.audioChunks, data.sampleRate || 24000);
+      }
+    } catch {
+      setError("Gagal menghubungi Gemini Live API. Periksa koneksi internet Anda.");
+    } finally {
+      setIsProcessingAudio(false);
+    }
+  }, [apiKey, targetLanguage, nativeLanguage, playAudioChunks]);
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        }
+      });
 
-      // Audio level visualization
-      const audioContext = new AudioContext();
+      mediaStreamRef.current = stream;
+      pcmBufferRef.current = [];
+
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = audioContext;
+
       const source = audioContext.createMediaStreamSource(stream);
+      sourceNodeRef.current = source;
+
+      // Analyser for visualization
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
@@ -212,142 +277,99 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
       };
       updateLevel();
 
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
+      // ScriptProcessor to capture PCM data
+      const bufferSize = 4096;
+      const scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+      scriptProcessorRef.current = scriptProcessor;
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      scriptProcessor.onaudioprocess = (event) => {
+        const inputData = event.inputBuffer.getChannelData(0);
+        pcmBufferRef.current.push(new Float32Array(inputData));
       };
 
-      mediaRecorder.onstop = async () => {
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-        setAudioLevel(0);
-        stream.getTracks().forEach(t => t.stop());
-        audioContext.close();
+      source.connect(scriptProcessor);
+      scriptProcessor.connect(audioContext.destination);
 
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-
-        // Use Web Speech API for transcription
-        setIsTranscribing(true);
-        try {
-          await transcribeWithWebSpeech(audioBlob);
-        } catch {
-          setError("Gagal mentranskrip audio. Coba ketik pesan Anda.");
-        } finally {
-          setIsTranscribing(false);
-        }
-      };
-
-      mediaRecorder.start();
       setIsRecording(true);
+      setError("");
     } catch {
       setError("Tidak dapat mengakses mikrofon. Pastikan izin mikrofon diberikan.");
     }
   };
 
-  const getSpeechRecognition = (): SpeechRecognitionConstructor | null => {
-    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
-  };
+  const stopRecording = async () => {
+    if (!isRecording) return;
 
-  const transcribeWithWebSpeech = async (_audioBlob: Blob): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const SpeechRecognitionClass = getSpeechRecognition();
-      if (!SpeechRecognitionClass) {
-        reject(new Error("Speech recognition not supported"));
-        return;
-      }
+    setIsRecording(false);
 
-      const recognition = new SpeechRecognitionClass();
-      recognition.lang = "id-ID";
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const transcript = event.results[0][0].transcript;
-        sendMessage(transcript, true, transcript);
-        resolve();
-      };
-
-      recognition.onerror = () => {
-        reject(new Error("Recognition error"));
-      };
-
-      recognition.onend = () => {
-        resolve();
-      };
-
-      recognition.start();
-    });
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+    // Stop animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
-  };
+    setAudioLevel(0);
 
-  const startLiveSpeech = () => {
-    const SpeechRecognitionClass = getSpeechRecognition();
-    if (!SpeechRecognitionClass) {
-      setError("Browser Anda tidak mendukung pengenalan suara. Gunakan Chrome.");
-      return;
+    // Disconnect audio nodes
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect();
+      scriptProcessorRef.current = null;
+    }
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.disconnect();
+      sourceNodeRef.current = null;
+    }
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+      analyserRef.current = null;
     }
 
-    const recognition = new SpeechRecognitionClass();
-    recognition.lang = "id-ID";
-    recognition.interimResults = true;
-    recognition.continuous = false;
+    // Stop media stream
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+    }
 
-    setIsRecording(true);
-    setError("");
+    // Close audio context
+    if (audioContextRef.current) {
+      await audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = Array.from(event.results)
-        .map((result: SpeechRecognitionResult) => result[0].transcript)
-        .join("");
+    // Combine all PCM buffers
+    const buffers = pcmBufferRef.current;
+    if (buffers.length === 0) return;
 
-      if (event.results[event.results.length - 1].isFinal) {
-        setInputText(transcript);
-        setIsRecording(false);
-      } else {
-        setInputText(transcript);
-      }
-    };
+    const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0);
+    const combined = new Float32Array(totalLength);
+    let offset = 0;
+    for (const buf of buffers) {
+      combined.set(buf, offset);
+      offset += buf.length;
+    }
+    pcmBufferRef.current = [];
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error !== "aborted") {
-        setError("Gagal mengenali suara. Coba lagi.");
-      }
-      setIsRecording(false);
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-    };
-
-    recognition.start();
-  };
-
-  const stopSpeaking = () => {
-    window.speechSynthesis?.cancel();
-    setIsSpeaking(false);
+    if (liveMode) {
+      await sendAudioToLiveAPI(combined);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(inputText);
+      sendTextMessage(inputText);
     }
   };
 
   const formatMessage = (text: string) => {
-    // Simple markdown-like formatting
     return text
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>")
       .replace(/\n/g, "<br/>");
+  };
+
+  const stopAudio = () => {
+    // Stop any playing audio by closing the context
+    setIsPlayingAudio(false);
   };
 
   return (
@@ -362,7 +384,7 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
           </div>
           <div>
             <h1 className="text-white font-bold text-sm">AI Language Tutor</h1>
-            <p className="text-purple-300 text-xs">Powered by Gemini</p>
+            <p className="text-purple-300 text-xs">Gemini 2.5 Flash Live Audio</p>
           </div>
         </div>
 
@@ -398,14 +420,16 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
         <div className="bg-black/40 backdrop-blur-md border-b border-white/10 px-4 py-3">
           <div className="flex items-center justify-between max-w-2xl mx-auto">
             <div className="flex items-center gap-3">
-              <label className="text-white text-sm font-medium">Auto Bicara</label>
+              <label className="text-white text-sm font-medium">Mode Live Audio</label>
               <button
-                onClick={() => setAutoSpeak(!autoSpeak)}
-                className={`relative w-10 h-5 rounded-full transition-colors ${autoSpeak ? "bg-purple-600" : "bg-slate-600"}`}
+                onClick={() => setLiveMode(!liveMode)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${liveMode ? "bg-purple-600" : "bg-slate-600"}`}
               >
-                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoSpeak ? "translate-x-5" : "translate-x-0.5"}`} />
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${liveMode ? "translate-x-5" : "translate-x-0.5"}`} />
               </button>
-              <span className="text-slate-400 text-xs">{autoSpeak ? "AI akan membaca respons" : "Mode diam"}</span>
+              <span className="text-slate-400 text-xs">
+                {liveMode ? "Gemini 2.5 Flash Live (audio native)" : "Mode teks saja"}
+              </span>
             </div>
             <button
               onClick={onResetKey}
@@ -416,6 +440,18 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
               </svg>
               Ganti API Key
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Live Mode Banner */}
+      {liveMode && (
+        <div className="bg-purple-900/30 border-b border-purple-500/20 px-4 py-2">
+          <div className="max-w-2xl mx-auto flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            <span className="text-purple-300 text-xs">
+              Mode Live Audio aktif — menggunakan <strong>gemini-2.5-flash-native-audio-preview</strong>
+            </span>
           </div>
         </div>
       )}
@@ -446,7 +482,7 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                   </svg>
-                  Pesan suara
+                  {msg.role === "user" ? "Pesan suara" : "Respons audio Gemini Live"}
                 </div>
               )}
               <div
@@ -482,15 +518,38 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
           </div>
         )}
 
-        {/* Transcribing indicator */}
-        {isTranscribing && (
+        {/* Processing audio indicator */}
+        {isProcessingAudio && (
           <div className="flex justify-center">
             <div className="bg-purple-600/20 border border-purple-500/30 rounded-full px-4 py-2 flex items-center gap-2">
               <svg className="w-4 h-4 text-purple-400 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <span className="text-purple-300 text-xs">Memproses suara...</span>
+              <span className="text-purple-300 text-xs">Memproses audio dengan Gemini Live...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Playing audio indicator */}
+        {isPlayingAudio && (
+          <div className="flex justify-center">
+            <div className="bg-green-600/20 border border-green-500/30 rounded-full px-4 py-2 flex items-center gap-2">
+              <div className="flex items-center gap-0.5">
+                {[...Array(4)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-1 bg-green-400 rounded-full animate-bounce"
+                    style={{ height: "12px", animationDelay: `${i * 100}ms` }}
+                  />
+                ))}
+              </div>
+              <span className="text-green-300 text-xs">Memutar respons audio...</span>
+              <button onClick={stopAudio} className="text-green-400 hover:text-green-300 ml-1">
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                </svg>
+              </button>
             </div>
           </div>
         )}
@@ -525,23 +584,25 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
                 {[...Array(5)].map((_, i) => (
                   <div
                     key={i}
-                    className="w-1 bg-red-400 rounded-full animate-wave"
+                    className="w-1 bg-red-400 rounded-full"
                     style={{
-                      height: `${Math.max(8, audioLevel * 0.3 + Math.random() * 20)}px`,
-                      animationDelay: `${i * 0.1}s`,
+                      height: `${Math.max(8, audioLevel * 0.3 + 8)}px`,
+                      transition: "height 0.1s ease",
                     }}
                   />
                 ))}
               </div>
-              <span className="text-red-400 text-sm font-medium animate-pulse">Mendengarkan...</span>
+              <span className="text-red-400 text-sm font-medium animate-pulse">
+                {liveMode ? "🎙️ Merekam untuk Gemini Live..." : "Mendengarkan..."}
+              </span>
               <div className="flex items-center gap-1">
                 {[...Array(5)].map((_, i) => (
                   <div
                     key={i}
-                    className="w-1 bg-red-400 rounded-full animate-wave"
+                    className="w-1 bg-red-400 rounded-full"
                     style={{
-                      height: `${Math.max(8, audioLevel * 0.3 + Math.random() * 20)}px`,
-                      animationDelay: `${(4 - i) * 0.1}s`,
+                      height: `${Math.max(8, audioLevel * 0.3 + 8)}px`,
+                      transition: "height 0.1s ease",
                     }}
                   />
                 ))}
@@ -565,13 +626,16 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
 
             {/* Voice button */}
             <button
-              onClick={isRecording ? stopRecording : startLiveSpeech}
-              disabled={isLoading || isTranscribing}
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isLoading || isProcessingAudio}
               className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 ${
                 isRecording
                   ? "bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/30 scale-110"
+                  : liveMode
+                  ? "bg-purple-600 hover:bg-purple-500 border border-purple-400/30 shadow-lg shadow-purple-500/20"
                   : "bg-white/10 hover:bg-white/20 border border-white/20"
               } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={liveMode ? "Bicara dengan Gemini Live API" : "Rekam suara"}
             >
               {isRecording ? (
                 <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -584,31 +648,20 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
               )}
             </button>
 
-            {/* Stop speaking / Send button */}
-            {isSpeaking ? (
-              <button
-                onClick={stopSpeaking}
-                className="w-12 h-12 rounded-xl bg-amber-500 hover:bg-amber-600 flex items-center justify-center transition-all duration-200 flex-shrink-0 shadow-lg shadow-amber-500/30"
-              >
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                </svg>
-              </button>
-            ) : (
-              <button
-                onClick={() => sendMessage(inputText)}
-                disabled={!inputText.trim() || isLoading}
-                className="w-12 h-12 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:bg-purple-800 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 flex-shrink-0 shadow-lg shadow-purple-500/20"
-              >
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
-            )}
+            {/* Send button */}
+            <button
+              onClick={() => sendTextMessage(inputText)}
+              disabled={!inputText.trim() || isLoading}
+              className="w-12 h-12 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:bg-purple-800 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 flex-shrink-0 shadow-lg shadow-purple-500/20"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
           </div>
 
           <p className="text-slate-500 text-xs text-center mt-2">
-            Enter untuk kirim • Shift+Enter untuk baris baru • 🎙️ untuk bicara
+            Enter untuk kirim • {liveMode ? "🎙️ Tekan mikrofon untuk Live Audio Gemini 2.5" : "🎙️ untuk rekam suara"}
           </p>
         </div>
       </div>

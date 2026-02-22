@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@google/genai": "^1.42.0",
     "@google/generative-ai": "^0.24.1",
     "next": "^16.1.3",
     "react": "^19.2.3",

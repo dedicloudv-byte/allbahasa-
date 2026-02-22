@@ -15,6 +15,9 @@ The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. I
 - [x] Memory bank documentation
 - [x] Recipe system for common features
 - [x] AI Language Learning app with real-time audio and Gemini integration
+- [x] Upgraded to @google/genai SDK (v1.42.0) with Gemini 2.5 Flash Native Audio Live API
+- [x] New `/api/gemini/live` route for real-time audio via `gemini-2.5-flash-native-audio-preview-12-2025`
+- [x] LanguageLearningApp rewritten to use Web Audio API for PCM capture and Gemini Live audio playback
 
 ## Current Structure
 
