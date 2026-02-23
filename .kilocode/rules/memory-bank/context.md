@@ -28,6 +28,8 @@ The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. I
 - [x] Collapsible left sidebar with language selector, Live Mode toggle, Activity Log toggle, and API key reset
 - [x] Simplified top header bar (status indicators + current language badge only)
 - [x] Cleaner 3-panel layout: left sidebar | chat area | right activity log panel
+- [x] Adjusted AI message alignment to left side (reduced max-width from 72% to 65%)
+- [x] Reduced microphone button size from 52x52 to 40x40 for wider text input area
 
 ## Current Structure
 
