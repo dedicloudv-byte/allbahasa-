@@ -726,7 +726,7 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
                   </svg>
                 </div>
               )}
-              <div className="max-w-[72%] flex flex-col gap-1">
+              <div className="max-w-[65%] flex flex-col gap-1">
                 <div
                   className={`rounded-2xl px-4 py-3 ${msg.role === "user" ? "rounded-br-sm" : "rounded-bl-sm"}`}
                   style={msg.role === "user" ? {
@@ -877,10 +877,10 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
             <button
               onClick={isRecording ? stopRecording : startRecording}
               disabled={isLoading || isProcessingAudio}
-              className="rounded-2xl flex items-center justify-center transition-all duration-200 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
               style={{
-                width: "52px",
-                height: "52px",
+                width: "40px",
+                height: "40px",
                 background: isRecording
                   ? "linear-gradient(135deg, #ef4444, #dc2626)"
                   : liveMode
@@ -897,11 +897,11 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
               title={liveMode ? "Bicara dengan Gemini Live API" : "Rekam suara"}
             >
               {isRecording ? (
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
                   <rect x="6" y="6" width="12" height="12" rx="2" />
                 </svg>
               ) : (
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               )}
