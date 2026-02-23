@@ -83,13 +83,13 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
   const [targetLanguage, setTargetLanguage] = useState("English");
   const [nativeLanguage] = useState("Indonesian");
   const [audioLevel, setAudioLevel] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState("");
   const [liveMode, setLiveMode] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [showLog, setShowLog] = useState(true);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [waveformBars, setWaveformBars] = useState<number[]>(Array(20).fill(4));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -133,7 +133,7 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
     setMessages([
       {
         role: "model",
-        parts: [{ text: `Halo! Saya siap membantu kamu belajar **${targetLanguage}**! 🎉\n\nKamu bisa:\n- 🎙️ Tekan tombol mikrofon untuk berbicara langsung dengan AI (Gemini Live)\n- ⌨️ Ketik pesan di bawah\n- 🌍 Ganti bahasa target di pengaturan\n\nMari mulai! Coba ucapkan atau ketik sesuatu dalam ${targetLanguage} atau Bahasa Indonesia.` }],
+        parts: [{ text: `Halo! Saya siap membantu kamu belajar **${targetLanguage}**! 🎉\n\nKamu bisa:\n- 🎙️ Tekan tombol mikrofon untuk berbicara langsung dengan AI (Gemini Live)\n- ⌨️ Ketik pesan di bawah\n- 🌍 Ganti bahasa target di sidebar kiri\n\nMari mulai! Coba ucapkan atau ketik sesuatu dalam ${targetLanguage} atau Bahasa Indonesia.` }],
         timestamp: new Date(),
       },
     ]);
@@ -452,7 +452,7 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex flex-col" style={{
+    <div className="h-screen flex overflow-hidden" style={{
       background: "radial-gradient(ellipse at top left, #1a0533 0%, #0a0a0f 40%, #001a2e 100%)"
     }}>
       {/* Ambient glow effects */}
@@ -462,133 +462,206 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
         <div className="absolute -bottom-20 left-1/3 w-72 h-72 bg-violet-600/8 rounded-full blur-3xl" />
       </div>
 
-      {/* Header */}
-      <header className="relative z-10 border-b border-white/5 px-5 py-4 flex items-center justify-between"
-        style={{ background: "rgba(10,10,20,0.8)", backdropFilter: "blur(20px)" }}>
-        <div className="flex items-center gap-4">
-          {/* Logo */}
-          <div className="relative">
-            <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-2xl"
+      {/* ─── LEFT SIDEBAR ─── */}
+      <aside
+        className="relative z-20 flex flex-col flex-shrink-0 transition-all duration-300"
+        style={{
+          width: sidebarCollapsed ? "64px" : "240px",
+          background: "rgba(8,8,18,0.95)",
+          borderRight: "1px solid rgba(255,255,255,0.06)",
+          backdropFilter: "blur(24px)",
+        }}
+      >
+        {/* Sidebar header / logo */}
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-white/5">
+          <div className="relative flex-shrink-0">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-xl"
               style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4.5 h-4.5 text-white" style={{ width: "18px", height: "18px" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
             </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0a0a0f]"
+            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#08080f]"
               style={{ background: isConnected ? "#10b981" : "#ef4444" }} />
           </div>
-          <div>
-            <h1 className="text-white font-bold text-base tracking-tight">AI Language Tutor</h1>
-            <div className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
-              <p className="text-xs" style={{ color: isConnected ? "#34d399" : "#f87171" }}>
-                {isConnected ? "Tersambung ke Gemini 2.5 Flash" : "Terputus"}
+          {!sidebarCollapsed && (
+            <div className="min-w-0">
+              <h1 className="text-white font-bold text-sm tracking-tight truncate">AI Language Tutor</h1>
+              <p className="text-xs truncate" style={{ color: isConnected ? "#34d399" : "#f87171" }}>
+                {isConnected ? "Tersambung" : "Terputus"}
               </p>
             </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Language selector */}
-          <select
-            value={targetLanguage}
-            onChange={(e) => {
-              setTargetLanguage(e.target.value);
-              addLog("info", `Bahasa target diubah ke: ${e.target.value}`);
-            }}
-            className="text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500/50 cursor-pointer"
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
-          >
-            {LANGUAGES.map(lang => (
-              <option key={lang.code} value={lang.code} className="bg-slate-900">
-                {lang.label}
-              </option>
-            ))}
-          </select>
-
-          {/* Log toggle */}
+          )}
           <button
-            onClick={() => setShowLog(!showLog)}
-            className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 flex items-center gap-1.5 ${showLog ? "text-violet-300" : "text-slate-500 hover:text-slate-300"}`}
-            style={{ background: showLog ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.05)", border: `1px solid ${showLog ? "rgba(139,92,246,0.3)" : "rgba(255,255,255,0.08)"}` }}
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="ml-auto flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/8 transition-all"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            Log
-          </button>
-
-          {/* Settings button */}
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${showSettings ? "text-purple-300" : "text-slate-400 hover:text-white"}`}
-            style={{ background: showSettings ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              {sidebarCollapsed
+                ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              }
             </svg>
           </button>
         </div>
-      </header>
 
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="relative z-10 border-b border-white/5 px-5 py-4"
-          style={{ background: "rgba(10,10,20,0.9)", backdropFilter: "blur(20px)" }}>
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
-            <div className="flex items-center gap-4">
-              <div>
-                <p className="text-white text-sm font-medium mb-0.5">Mode Live Audio</p>
-                <p className="text-slate-500 text-xs">Gunakan Gemini 2.5 Flash Native Audio</p>
-              </div>
-              <button
-                onClick={() => {
-                  setLiveMode(!liveMode);
-                  addLog("info", `Mode Live Audio ${!liveMode ? "diaktifkan" : "dinonaktifkan"}`);
-                }}
-                className={`relative w-12 h-6 rounded-full transition-all duration-300 ${liveMode ? "" : ""}`}
-                style={{ background: liveMode ? "linear-gradient(135deg, #7c3aed, #4f46e5)" : "rgba(255,255,255,0.1)" }}
-              >
-                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-lg transition-transform duration-300 ${liveMode ? "translate-x-7" : "translate-x-1"}`} />
-              </button>
-              <span className="text-xs" style={{ color: liveMode ? "#a78bfa" : "#64748b" }}>
-                {liveMode ? "Aktif" : "Nonaktif"}
-              </span>
+        {/* Sidebar content */}
+        <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6"
+          style={{ scrollbarWidth: "none" }}>
+
+          {/* Language Selection */}
+          <div>
+            {!sidebarCollapsed && (
+              <p className="text-slate-600 text-xs font-semibold uppercase tracking-widest mb-2 px-1">
+                Bahasa Target
+              </p>
+            )}
+            <div className="space-y-1">
+              {LANGUAGES.map(lang => (
+                <button
+                  key={lang.code}
+                  onClick={() => {
+                    setTargetLanguage(lang.code);
+                    addLog("info", `Bahasa target diubah ke: ${lang.code}`);
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm transition-all duration-150 ${
+                    targetLanguage === lang.code
+                      ? "text-white"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                  }`}
+                  style={targetLanguage === lang.code ? {
+                    background: "rgba(124,58,237,0.2)",
+                    border: "1px solid rgba(124,58,237,0.3)",
+                  } : {
+                    border: "1px solid transparent",
+                  }}
+                  title={lang.label}
+                >
+                  <span className="text-base flex-shrink-0">{lang.label.split(" ")[0]}</span>
+                  {!sidebarCollapsed && (
+                    <span className="truncate text-xs font-medium">{lang.label.split(" ").slice(1).join(" ")}</span>
+                  )}
+                  {!sidebarCollapsed && targetLanguage === lang.code && (
+                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
+                  )}
+                </button>
+              ))}
             </div>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-white/5" />
+
+          {/* Settings */}
+          <div>
+            {!sidebarCollapsed && (
+              <p className="text-slate-600 text-xs font-semibold uppercase tracking-widest mb-3 px-1">
+                Pengaturan
+              </p>
+            )}
+
+            {/* Live Mode Toggle */}
+            <div className={`px-2.5 py-3 rounded-xl mb-2 ${sidebarCollapsed ? "flex justify-center" : ""}`}
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              {sidebarCollapsed ? (
+                <button
+                  onClick={() => {
+                    setLiveMode(!liveMode);
+                    addLog("info", `Mode Live Audio ${!liveMode ? "diaktifkan" : "dinonaktifkan"}`);
+                  }}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+                  style={{ background: liveMode ? "rgba(124,58,237,0.3)" : "rgba(255,255,255,0.05)" }}
+                  title="Toggle Live Mode"
+                >
+                  <svg className="w-4 h-4" style={{ color: liveMode ? "#a78bfa" : "#64748b" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 18.364a9 9 0 000-12.728M8.464 15.536a5 5 0 010-7.072" />
+                  </svg>
+                </button>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-white text-xs font-medium">Live Audio</p>
+                    <p className="text-slate-600 text-xs mt-0.5">Gemini 2.5 Flash Native</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setLiveMode(!liveMode);
+                      addLog("info", `Mode Live Audio ${!liveMode ? "diaktifkan" : "dinonaktifkan"}`);
+                    }}
+                    className="relative w-10 h-5 rounded-full transition-all duration-300 flex-shrink-0"
+                    style={{ background: liveMode ? "linear-gradient(135deg, #7c3aed, #4f46e5)" : "rgba(255,255,255,0.1)" }}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-lg transition-transform duration-300 ${liveMode ? "translate-x-5" : "translate-x-0.5"}`} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Activity Log Toggle */}
             <button
-              onClick={onResetKey}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-red-400 hover:text-red-300 transition-colors"
-              style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}
+              onClick={() => setShowLog(!showLog)}
+              className={`w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl text-xs font-medium transition-all duration-150 mb-2 ${
+                showLog ? "text-violet-300" : "text-slate-500 hover:text-slate-300"
+              }`}
+              style={{
+                background: showLog ? "rgba(139,92,246,0.12)" : "rgba(255,255,255,0.03)",
+                border: `1px solid ${showLog ? "rgba(139,92,246,0.25)" : "rgba(255,255,255,0.06)"}`,
+              }}
+              title="Toggle Activity Log"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              Ganti API Key
+              {!sidebarCollapsed && <span>Activity Log</span>}
+              {!sidebarCollapsed && (
+                <span className="ml-auto text-xs px-1.5 py-0.5 rounded-md"
+                  style={{ background: showLog ? "rgba(139,92,246,0.2)" : "rgba(255,255,255,0.05)", color: showLog ? "#a78bfa" : "#475569" }}>
+                  {logs.length}
+                </span>
+              )}
             </button>
           </div>
         </div>
-      )}
 
-      {/* Main content area */}
-      <div className="flex-1 flex overflow-hidden relative z-10">
-        {/* Chat area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Status bar */}
-          <div className="px-5 py-2 flex items-center gap-3 border-b border-white/5"
-            style={{ background: "rgba(10,10,20,0.5)" }}>
+        {/* Sidebar footer — API Key reset */}
+        <div className="border-t border-white/5 p-3">
+          <button
+            onClick={onResetKey}
+            className={`w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl text-xs font-medium text-red-400 hover:text-red-300 transition-all duration-150 ${sidebarCollapsed ? "justify-center" : ""}`}
+            style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)" }}
+            title="Ganti API Key"
+          >
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+            {!sidebarCollapsed && <span>Ganti API Key</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* ─── MAIN CONTENT ─── */}
+      <div className="flex-1 flex flex-col min-w-0 relative z-10">
+
+        {/* Top bar */}
+        <header className="flex items-center justify-between px-5 py-3 border-b border-white/5 flex-shrink-0"
+          style={{ background: "rgba(10,10,20,0.7)", backdropFilter: "blur(20px)" }}>
+
+          {/* Status indicators */}
+          <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
               <span className="text-xs font-medium" style={{ color: isConnected ? "#34d399" : "#f87171" }}>
-                {isConnected ? "Tersambung" : "Terputus"}
+                {isConnected ? "Gemini 2.5 Flash" : "Terputus"}
               </span>
             </div>
-            <div className="w-px h-3 bg-white/10" />
             {liveMode && (
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
-                <span className="text-violet-400 text-xs">Live Audio Aktif</span>
-              </div>
+              <>
+                <div className="w-px h-3 bg-white/10" />
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
+                  <span className="text-violet-400 text-xs">Live Audio</span>
+                </div>
+              </>
             )}
             {isRecording && (
               <>
@@ -607,7 +680,7 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  <span className="text-violet-400 text-xs">Memproses audio...</span>
+                  <span className="text-violet-400 text-xs">Memproses...</span>
                 </div>
               </>
             )}
@@ -627,357 +700,368 @@ export default function LanguageLearningApp({ apiKey, onResetKey }: LanguageLear
             )}
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5"
-            style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(139,92,246,0.3) transparent" }}>
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} items-end gap-3`}
-              >
-                {msg.role === "model" && (
-                  <div className="w-8 h-8 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg"
-                    style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
-                    </svg>
-                  </div>
-                )}
-                <div className="max-w-[75%] flex flex-col gap-1">
-                  <div
-                    className={`rounded-2xl px-4 py-3 ${
-                      msg.role === "user"
-                        ? "rounded-br-sm"
-                        : "rounded-bl-sm"
-                    }`}
-                    style={msg.role === "user" ? {
-                      background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
-                      boxShadow: "0 4px 20px rgba(124,58,237,0.3)"
-                    } : {
-                      background: "rgba(255,255,255,0.06)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      backdropFilter: "blur(10px)"
-                    }}
-                  >
-                    {msg.isAudio && (
-                      <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-white/10">
-                        <div className="flex gap-0.5 items-end">
-                          {[...Array(5)].map((_, i) => (
-                            <div key={i} className="w-0.5 rounded-full"
-                              style={{
-                                height: `${6 + Math.sin(i * 1.2) * 4}px`,
-                                background: msg.role === "user" ? "rgba(255,255,255,0.7)" : "#a78bfa"
-                              }} />
-                          ))}
-                        </div>
-                        <span className="text-xs" style={{ color: msg.role === "user" ? "rgba(255,255,255,0.7)" : "#a78bfa" }}>
-                          {msg.role === "user" ? "Pesan suara" : "Respons audio Gemini Live"}
-                        </span>
-                      </div>
-                    )}
-                    <div
-                      className="text-sm leading-relaxed text-white"
-                      dangerouslySetInnerHTML={{ __html: formatMessage(msg.parts[0].text) }}
-                    />
-                  </div>
-                  {msg.timestamp && (
-                    <p className={`text-xs text-slate-600 ${msg.role === "user" ? "text-right" : "text-left"}`}>
-                      {formatTime(msg.timestamp)}
-                    </p>
-                  )}
-                </div>
-                {msg.role === "user" && (
-                  <div className="w-8 h-8 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>
-                    <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                )}
-              </div>
-            ))}
+          {/* Current language badge */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
+              style={{ background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.2)" }}>
+              <span className="text-sm">{LANGUAGES.find(l => l.code === targetLanguage)?.label.split(" ")[0]}</span>
+              <span className="text-violet-300 text-xs font-medium">{targetLanguage}</span>
+            </div>
+          </div>
+        </header>
 
-            {/* Loading indicator */}
-            {isLoading && (
-              <div className="flex justify-start items-end gap-3">
-                <div className="w-8 h-8 rounded-2xl flex items-center justify-center flex-shrink-0"
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5"
+          style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(139,92,246,0.3) transparent" }}>
+          {messages.map((msg, idx) => (
+            <div
+              key={idx}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} items-end gap-3`}
+            >
+              {msg.role === "model" && (
+                <div className="w-8 h-8 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg"
                   style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
                   </svg>
                 </div>
-                <div className="rounded-2xl rounded-bl-sm px-5 py-4"
-                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  <div className="flex items-center gap-1.5">
-                    {[0, 150, 300].map(delay => (
-                      <div key={delay} className="w-2 h-2 rounded-full animate-bounce"
-                        style={{ background: "#7c3aed", animationDelay: `${delay}ms` }} />
-                    ))}
-                  </div>
+              )}
+              <div className="max-w-[72%] flex flex-col gap-1">
+                <div
+                  className={`rounded-2xl px-4 py-3 ${msg.role === "user" ? "rounded-br-sm" : "rounded-bl-sm"}`}
+                  style={msg.role === "user" ? {
+                    background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
+                    boxShadow: "0 4px 20px rgba(124,58,237,0.3)"
+                  } : {
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    backdropFilter: "blur(10px)"
+                  }}
+                >
+                  {msg.isAudio && (
+                    <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-white/10">
+                      <div className="flex gap-0.5 items-end">
+                        {[...Array(5)].map((_, i) => (
+                          <div key={i} className="w-0.5 rounded-full"
+                            style={{
+                              height: `${6 + Math.sin(i * 1.2) * 4}px`,
+                              background: msg.role === "user" ? "rgba(255,255,255,0.7)" : "#a78bfa"
+                            }} />
+                        ))}
+                      </div>
+                      <span className="text-xs" style={{ color: msg.role === "user" ? "rgba(255,255,255,0.7)" : "#a78bfa" }}>
+                        {msg.role === "user" ? "Pesan suara" : "Respons audio Gemini Live"}
+                      </span>
+                    </div>
+                  )}
+                  <div
+                    className="text-sm leading-relaxed text-white"
+                    dangerouslySetInnerHTML={{ __html: formatMessage(msg.parts[0].text) }}
+                  />
                 </div>
+                {msg.timestamp && (
+                  <p className={`text-xs text-slate-600 ${msg.role === "user" ? "text-right" : "text-left"}`}>
+                    {formatTime(msg.timestamp)}
+                  </p>
+                )}
               </div>
-            )}
-
-            {/* Error */}
-            {error && (
-              <div className="flex justify-center">
-                <div className="flex items-center gap-3 px-4 py-3 rounded-2xl max-w-sm"
-                  style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
-                  <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              {msg.role === "user" && (
+                <div className="w-8 h-8 rounded-2xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                  <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
-                  <p className="text-red-300 text-xs flex-1">{error}</p>
-                  <button onClick={() => setError("")} className="text-red-400 hover:text-red-300 transition-colors">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
                 </div>
+              )}
+            </div>
+          ))}
+
+          {/* Loading indicator */}
+          {isLoading && (
+            <div className="flex justify-start items-end gap-3">
+              <div className="w-8 h-8 rounded-2xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "linear-gradient(135deg, #7c3aed, #4f46e5)" }}>
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+                </svg>
               </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input Area */}
-          <div className="border-t border-white/5 px-5 py-4"
-            style={{ background: "rgba(10,10,20,0.8)", backdropFilter: "blur(20px)" }}>
-
-            {/* Waveform visualizer when recording */}
-            {isRecording && (
-              <div className="mb-4 flex flex-col items-center gap-2">
-                <div className="flex items-end gap-0.5 h-14 px-4 py-2 rounded-2xl w-full max-w-md"
-                  style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
-                  {waveformBars.map((height, i) => (
-                    <div
-                      key={i}
-                      className="flex-1 rounded-full transition-all duration-75"
-                      style={{
-                        height: `${height}px`,
-                        background: `linear-gradient(to top, #ef4444, #f97316)`,
-                        opacity: 0.7 + (height / 48) * 0.3,
-                      }}
-                    />
+              <div className="rounded-2xl rounded-bl-sm px-5 py-4"
+                style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div className="flex items-center gap-1.5">
+                  {[0, 150, 300].map(delay => (
+                    <div key={delay} className="w-2 h-2 rounded-full animate-bounce"
+                      style={{ background: "#7c3aed", animationDelay: `${delay}ms` }} />
                   ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                  <span className="text-red-400 text-xs font-medium">
-                    {liveMode ? "🎙️ Merekam untuk Gemini Live..." : "Mendengarkan..."}
-                  </span>
-                </div>
               </div>
-            )}
-
-            <div className="flex items-end gap-3">
-              {/* Text input */}
-              <div className="flex-1 relative">
-                <textarea
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={`Ketik dalam ${targetLanguage} atau Bahasa Indonesia...`}
-                  rows={1}
-                  className="w-full text-white placeholder-slate-600 focus:outline-none resize-none text-sm"
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "16px",
-                    padding: "14px 18px",
-                    minHeight: "52px",
-                    maxHeight: "128px",
-                    overflowY: "auto",
-                    transition: "border-color 0.2s",
-                  }}
-                  onFocus={e => e.target.style.borderColor = "rgba(124,58,237,0.5)"}
-                  onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
-                />
-              </div>
-
-              {/* Voice button */}
-              <button
-                onClick={isRecording ? stopRecording : startRecording}
-                disabled={isLoading || isProcessingAudio}
-                className="w-13 h-13 rounded-2xl flex items-center justify-center transition-all duration-200 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  width: "52px",
-                  height: "52px",
-                  background: isRecording
-                    ? "linear-gradient(135deg, #ef4444, #dc2626)"
-                    : liveMode
-                    ? "linear-gradient(135deg, #7c3aed, #4f46e5)"
-                    : "rgba(255,255,255,0.08)",
-                  boxShadow: isRecording
-                    ? "0 4px 20px rgba(239,68,68,0.4)"
-                    : liveMode
-                    ? "0 4px 20px rgba(124,58,237,0.3)"
-                    : "none",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  transform: isRecording ? "scale(1.05)" : "scale(1)",
-                }}
-                title={liveMode ? "Bicara dengan Gemini Live API" : "Rekam suara"}
-              >
-                {isRecording ? (
-                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <rect x="6" y="6" width="12" height="12" rx="2" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                  </svg>
-                )}
-              </button>
-
-              {/* Send button */}
-              <button
-                onClick={() => sendTextMessage(inputText)}
-                disabled={!inputText.trim() || isLoading}
-                className="flex items-center justify-center transition-all duration-200 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  width: "52px",
-                  height: "52px",
-                  borderRadius: "16px",
-                  background: inputText.trim() && !isLoading
-                    ? "linear-gradient(135deg, #7c3aed, #4f46e5)"
-                    : "rgba(255,255,255,0.05)",
-                  boxShadow: inputText.trim() && !isLoading ? "0 4px 20px rgba(124,58,237,0.3)" : "none",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                }}
-              >
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
             </div>
+          )}
 
-            <p className="text-slate-600 text-xs text-center mt-3">
-              Enter untuk kirim • {liveMode ? "🎙️ Tekan mikrofon untuk Live Audio Gemini 2.5" : "🎙️ untuk rekam suara"}
-            </p>
-          </div>
-        </div>
-
-        {/* Activity Log Panel */}
-        {showLog && (
-          <div className="w-72 flex flex-col border-l border-white/5 flex-shrink-0"
-            style={{ background: "rgba(8,8,16,0.9)", backdropFilter: "blur(20px)" }}>
-            {/* Log header */}
-            <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
-                <h3 className="text-white text-xs font-semibold tracking-wide uppercase">Activity Log</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-600 text-xs">{logs.length} entri</span>
-                <button
-                  onClick={() => setLogs([])}
-                  className="text-slate-600 hover:text-slate-400 transition-colors text-xs"
-                  title="Bersihkan log"
-                >
+          {/* Error */}
+          {error && (
+            <div className="flex justify-center">
+              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl max-w-sm"
+                style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-red-300 text-xs flex-1">{error}</p>
+                <button onClick={() => setError("")} className="text-red-400 hover:text-red-300 transition-colors">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
             </div>
+          )}
 
-            {/* Connection status card */}
-            <div className="mx-3 mt-3 mb-2 px-3 py-2.5 rounded-xl"
-              style={{
-                background: isConnected ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
-                border: `1px solid ${isConnected ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
-              }}>
-              <div className="flex items-center gap-2">
-                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isConnected ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
-                <div>
-                  <p className="text-xs font-semibold" style={{ color: isConnected ? "#34d399" : "#f87171" }}>
-                    {isConnected ? "● TERSAMBUNG" : "● TERPUTUS"}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: isConnected ? "#6ee7b7" : "#fca5a5" }}>
-                    {isConnected ? "Gemini 2.5 Flash Live API" : "Tidak ada koneksi"}
-                  </p>
-                </div>
-              </div>
-            </div>
+          <div ref={messagesEndRef} />
+        </div>
 
-            {/* Log entries */}
-            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5"
-              style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(139,92,246,0.2) transparent" }}>
-              {logs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-32 gap-2">
-                  <svg className="w-8 h-8 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  <p className="text-slate-700 text-xs">Belum ada aktivitas</p>
-                </div>
-              ) : (
-                logs.map(log => {
-                  const cfg = logTypeConfig[log.type];
-                  return (
-                    <div key={log.id} className={`px-3 py-2 rounded-xl ${cfg.bg}`}
-                      style={{ border: "1px solid rgba(255,255,255,0.04)" }}>
-                      <div className="flex items-start gap-2">
-                        <span className="text-xs flex-shrink-0 mt-0.5">{cfg.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs leading-relaxed ${cfg.color} break-words`}>{log.message}</p>
-                          <p className="text-slate-700 text-xs mt-0.5">{formatTime(log.timestamp)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={logEndRef} />
-            </div>
+        {/* Input Area */}
+        <div className="border-t border-white/5 px-5 py-4 flex-shrink-0"
+          style={{ background: "rgba(10,10,20,0.85)", backdropFilter: "blur(20px)" }}>
 
-            {/* Audio level meter */}
-            {isRecording && (
-              <div className="px-3 py-3 border-t border-white/5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                  <span className="text-red-400 text-xs">Level Audio</span>
-                </div>
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+          {/* Waveform visualizer when recording */}
+          {isRecording && (
+            <div className="mb-4 flex flex-col items-center gap-2">
+              <div className="flex items-end gap-0.5 h-12 px-4 py-2 rounded-2xl w-full"
+                style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                {waveformBars.map((height, i) => (
                   <div
-                    className="h-full rounded-full transition-all duration-75"
+                    key={i}
+                    className="flex-1 rounded-full transition-all duration-75"
                     style={{
-                      width: `${Math.min(100, (audioLevel / 128) * 100)}%`,
-                      background: audioLevel > 80
-                        ? "linear-gradient(to right, #ef4444, #f97316)"
-                        : audioLevel > 40
-                        ? "linear-gradient(to right, #f97316, #eab308)"
-                        : "linear-gradient(to right, #10b981, #34d399)",
+                      height: `${height}px`,
+                      background: `linear-gradient(to top, #ef4444, #f97316)`,
+                      opacity: 0.7 + (height / 48) * 0.3,
                     }}
                   />
-                </div>
-                <p className="text-slate-600 text-xs mt-1 text-right">{Math.round((audioLevel / 128) * 100)}%</p>
+                ))}
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                <span className="text-red-400 text-xs font-medium">
+                  {liveMode ? "🎙️ Merekam untuk Gemini Live..." : "Mendengarkan..."}
+                </span>
+              </div>
+            </div>
+          )}
 
-            {/* Playing audio indicator */}
-            {isPlayingAudio && (
-              <div className="px-3 py-3 border-t border-white/5">
-                <div className="flex items-center justify-between px-3 py-2 rounded-xl"
-                  style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)" }}>
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-0.5 items-end">
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className="w-0.5 bg-emerald-400 rounded-full animate-bounce"
-                          style={{ height: "12px", animationDelay: `${i * 80}ms` }} />
-                      ))}
-                    </div>
-                    <span className="text-emerald-400 text-xs">Memutar...</span>
-                  </div>
-                  <button onClick={stopAudio} className="text-emerald-600 hover:text-emerald-400 transition-colors">
-                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="flex items-end gap-3">
+            {/* Text input */}
+            <div className="flex-1 relative">
+              <textarea
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={`Ketik dalam ${targetLanguage} atau Bahasa Indonesia...`}
+                rows={1}
+                className="w-full text-white placeholder-slate-600 focus:outline-none resize-none text-sm"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "16px",
+                  padding: "14px 18px",
+                  minHeight: "52px",
+                  maxHeight: "128px",
+                  overflowY: "auto",
+                  transition: "border-color 0.2s",
+                }}
+                onFocus={e => e.target.style.borderColor = "rgba(124,58,237,0.5)"}
+                onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.1)"}
+              />
+            </div>
+
+            {/* Voice button */}
+            <button
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isLoading || isProcessingAudio}
+              className="rounded-2xl flex items-center justify-center transition-all duration-200 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                width: "52px",
+                height: "52px",
+                background: isRecording
+                  ? "linear-gradient(135deg, #ef4444, #dc2626)"
+                  : liveMode
+                  ? "linear-gradient(135deg, #7c3aed, #4f46e5)"
+                  : "rgba(255,255,255,0.08)",
+                boxShadow: isRecording
+                  ? "0 4px 20px rgba(239,68,68,0.4)"
+                  : liveMode
+                  ? "0 4px 20px rgba(124,58,237,0.3)"
+                  : "none",
+                border: "1px solid rgba(255,255,255,0.1)",
+                transform: isRecording ? "scale(1.05)" : "scale(1)",
+              }}
+              title={liveMode ? "Bicara dengan Gemini Live API" : "Rekam suara"}
+            >
+              {isRecording ? (
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              )}
+            </button>
+
+            {/* Send button */}
+            <button
+              onClick={() => sendTextMessage(inputText)}
+              disabled={!inputText.trim() || isLoading}
+              className="flex items-center justify-center transition-all duration-200 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                width: "52px",
+                height: "52px",
+                borderRadius: "16px",
+                background: inputText.trim() && !isLoading
+                  ? "linear-gradient(135deg, #7c3aed, #4f46e5)"
+                  : "rgba(255,255,255,0.05)",
+                boxShadow: inputText.trim() && !isLoading ? "0 4px 20px rgba(124,58,237,0.3)" : "none",
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
           </div>
-        )}
+
+          <p className="text-slate-600 text-xs text-center mt-3">
+            Enter untuk kirim • {liveMode ? "🎙️ Tekan mikrofon untuk Live Audio Gemini 2.5" : "🎙️ untuk rekam suara"}
+          </p>
+        </div>
       </div>
+
+      {/* ─── RIGHT SIDEBAR — Activity Log ─── */}
+      {showLog && (
+        <aside className="w-68 flex flex-col flex-shrink-0 relative z-10"
+          style={{
+            width: "272px",
+            background: "rgba(6,6,14,0.95)",
+            borderLeft: "1px solid rgba(255,255,255,0.05)",
+            backdropFilter: "blur(24px)",
+          }}>
+
+          {/* Log header */}
+          <div className="px-4 py-3.5 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+              <h3 className="text-white text-xs font-semibold tracking-widest uppercase">Activity Log</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 text-xs">{logs.length}</span>
+              <button
+                onClick={() => setLogs([])}
+                className="text-slate-600 hover:text-slate-400 transition-colors"
+                title="Bersihkan log"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Connection status card */}
+          <div className="mx-3 mt-3 mb-2 px-3 py-2.5 rounded-xl flex-shrink-0"
+            style={{
+              background: isConnected ? "rgba(16,185,129,0.08)" : "rgba(239,68,68,0.08)",
+              border: `1px solid ${isConnected ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.2)"}`,
+            }}>
+            <div className="flex items-center gap-2">
+              <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isConnected ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
+              <div>
+                <p className="text-xs font-semibold" style={{ color: isConnected ? "#34d399" : "#f87171" }}>
+                  {isConnected ? "● TERSAMBUNG" : "● TERPUTUS"}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: isConnected ? "#6ee7b7" : "#fca5a5" }}>
+                  {isConnected ? "Gemini 2.5 Flash Live API" : "Tidak ada koneksi"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Log entries */}
+          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5"
+            style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(139,92,246,0.2) transparent" }}>
+            {logs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-32 gap-2">
+                <svg className="w-8 h-8 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <p className="text-slate-700 text-xs">Belum ada aktivitas</p>
+              </div>
+            ) : (
+              logs.map(log => {
+                const cfg = logTypeConfig[log.type];
+                return (
+                  <div key={log.id} className={`px-3 py-2 rounded-xl ${cfg.bg}`}
+                    style={{ border: "1px solid rgba(255,255,255,0.04)" }}>
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs flex-shrink-0 mt-0.5">{cfg.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-xs leading-relaxed ${cfg.color} break-words`}>{log.message}</p>
+                        <p className="text-slate-700 text-xs mt-0.5">{formatTime(log.timestamp)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div ref={logEndRef} />
+          </div>
+
+          {/* Audio level meter */}
+          {isRecording && (
+            <div className="px-3 py-3 border-t border-white/5 flex-shrink-0">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                <span className="text-red-400 text-xs">Level Audio</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+                <div
+                  className="h-full rounded-full transition-all duration-75"
+                  style={{
+                    width: `${Math.min(100, (audioLevel / 128) * 100)}%`,
+                    background: audioLevel > 80
+                      ? "linear-gradient(to right, #ef4444, #f97316)"
+                      : audioLevel > 40
+                      ? "linear-gradient(to right, #f97316, #eab308)"
+                      : "linear-gradient(to right, #10b981, #34d399)",
+                  }}
+                />
+              </div>
+              <p className="text-slate-600 text-xs mt-1 text-right">{Math.round((audioLevel / 128) * 100)}%</p>
+            </div>
+          )}
+
+          {/* Playing audio indicator */}
+          {isPlayingAudio && (
+            <div className="px-3 py-3 border-t border-white/5 flex-shrink-0">
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl"
+                style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)" }}>
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-0.5 items-end">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="w-0.5 bg-emerald-400 rounded-full animate-bounce"
+                        style={{ height: "12px", animationDelay: `${i * 80}ms` }} />
+                    ))}
+                  </div>
+                  <span className="text-emerald-400 text-xs">Memutar...</span>
+                </div>
+                <button onClick={stopAudio} className="text-emerald-600 hover:text-emerald-400 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+        </aside>
+      )}
     </div>
   );
 }
