@@ -25,6 +25,9 @@ The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. I
 - [x] Audio level meter in log panel during recording
 - [x] Message timestamps displayed under each chat bubble
 - [x] Status bar showing live recording/processing/playing states
+- [x] Collapsible left sidebar with language selector, Live Mode toggle, Activity Log toggle, and API key reset
+- [x] Simplified top header bar (status indicators + current language badge only)
+- [x] Cleaner 3-panel layout: left sidebar | chat area | right activity log panel
 
 ## Current Structure
 
